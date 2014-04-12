@@ -32,11 +32,11 @@ public $defaultQuality = 80;
 public $width;
 public $height;
 
+static protected $palette;
+static protected $topLeft;
+static protected $maxsize;
 protected $imagine;
 protected $gLib;
-protected $palette;
-protected $topLeft;
-protected $maxsize;
 
 /*
  * @param  int  $graphicsLib  (optional) specify a preferred graphics library
@@ -46,24 +46,28 @@ public function __construct($graphicsLib = 2) {
 	// Decide which graphics library to use and create the appropriate Imagine object
 	if ($graphicsLib > 1 && class_exists('Gmagick', false)) {
 		$this->debugmessages[] = 'Using Gmagick';
+		self::$maxsize = null;
 		set_time_limit(0);
-		$this->imagine = new Gmagick\Imagine();
+		$this->imagine = new Gmagick\RImagine();
 		$this->gLib = 2;
 	}
 	elseif ($graphicsLib && class_exists('Imagick', false)) {
 		$this->debugmessages[] = 'Using Imagick';
+		self::$maxsize = null;
 		set_time_limit(0);  // execution time accounting seems strange on some systems. Maybe because of multi-threading?
-		$this->imagine = new Imagick\Imagine();
+		$this->imagine = new Imagick\RImagine();
 		$this->gLib = 1;
 	}
 	else {  // good ol' GD
 		$this->debugmessages[] = 'Using GD';
-		$this->imagine = new \Imagine\Gd\Imagine();
-		$this->maxsize = ini_get('memory_limit');
-		$magnitude = strtoupper(substr($this->maxsize, -1));
-		if ($magnitude === 'G')  { $this->maxsize *= 1024; }
-		elseif ($magnitude === 'K')  { $this->maxsize /= 1024; }
-		$this->maxsize = ($this->maxsize - 18) * 209715;  // 20% of memory_limit, in bytes. -18MB for CMS, framework, PHP overhead
+		$this->imagine = new Gd\RImagine();
+		if (!isset(self::$maxsize)) {
+			self::$maxsize = ini_get('memory_limit');
+			$magnitude = strtoupper(substr(self::$maxsize, -1));
+			if ($magnitude === 'G')  { self::$maxsize *= 1024; }
+			elseif ($magnitude === 'K')  { self::$maxsize /= 1024; }
+			self::$maxsize = (self::$maxsize - 18) * 209715;  // 20% of memory_limit, in bytes. -18MB for CMS, framework, PHP overhead
+		}
 	}
 }
 
@@ -149,10 +153,12 @@ public function processImage($input, $output, $options = array()) {
 	$this->width = $this->height = null;
 	if (is_string($options))  { $options = parse_str($options); }  // convert an options string to an array if needed
 	$inputParams = array('options' => $options);
-	$outputIsJpg = strncasecmp('jp', pathinfo($input, PATHINFO_EXTENSION), 2) === 0;  // extension determines image format
+	$inputIsJpg = stripos(pathinfo($input, PATHINFO_EXTENSION), 'jp') !== false;  // extension determines image format
+	$outputType = strtolower(pathinfo($output, PATHINFO_EXTENSION));
+	$outputIsJpg = strpos($outputType, 'jp') !== false;  // extension determines image format
 	try {
 /* initial dimensions */
-		if ($outputIsJpg && $this->gLib) {
+		if ($inputIsJpg && $this->gLib) {
 			$image = null;
 			$size = getimagesize($input);
 			$origWidth = $inputParams['width'] = $size[0];
@@ -165,7 +171,7 @@ public function processImage($input, $output, $options = array()) {
 			$origHeight = $inputParams['height'] = $size->getHeight();
 		}
 
-		if ($this->maxsize && $origWidth * $origHeight > $this->maxsize) {  // if we're using GD we need to check the image will fit in memory
+		if (self::$maxsize && $origWidth * $origHeight > self::$maxsize) {  // if we're using GD we need to check the image will fit in memory
 			$this->debugmessages[] = "GD: $input may exceed available memory  ** Skipping **";
 			return false;
 		}
@@ -338,7 +344,7 @@ public function processImage($input, $output, $options = array()) {
 			$scale = max($width / $origWidth, $height / $origHeight);
 			if ($scale <= 0.5) {
 				$scaleBox = new Box(round($inputParams['width'] * $scale), round($inputParams['height'] * $scale));
-				$image = $this->imagine->Ropenjpg($input, $scaleBox);
+				$image = $this->imagine->Ropen($input, $scaleBox);
 				if ($this->debug)  { $decodersize = $image->getSize(); }
 				$filter = new Reduce($scaleBox);
 				$image = $filter->apply($image);
@@ -356,7 +362,7 @@ public function processImage($input, $output, $options = array()) {
 		if ( $didScale = ($width < $origWidth && $height < $origHeight) || !empty($options['aoe']) ) {
 			$imgBox = new Box($width, $height);
 			if (!$image) {
-				$image = $this->imagine->Ropenjpg($input, $imgBox);
+				$image = $this->imagine->Ropen($input, $imgBox);
 				if ($this->debug)  { $decodersize = $image->getSize(); }
 			}
 			$filter = new Reduce($imgBox);
@@ -393,21 +399,22 @@ public function processImage($input, $output, $options = array()) {
 
 /* bg */
 		if ( $hasBG = (isset($options['bg']) && !$outputIsJpg) || isset($farBox)) {
-			if (!isset($this->palette))  { $this->palette = new \Imagine\Image\Palette\RGB(); }
-			if (!isset($this->topLeft))  { $this->topLeft = new \Imagine\Image\Point(0, 0); }
+			if (self::$palette === null)  { self::$palette = new \Imagine\Image\Palette\RGB(); }
+			if (self::$topLeft === null)  { self::$topLeft = new \Imagine\Image\Point(0, 0); }
 			if (isset($options['bg']))  {
 				$bgColor = explode('/', $options['bg']);
 				$bgColor[1] = isset($bgColor[1]) ? $bgColor[1] : 100;
 			}
 			else  { $bgColor = array('ffffff', 100); }
 
-			$backgroundColor = $this->palette->color($bgColor[0], 100 - $bgColor[1]);
+			$backgroundColor = self::$palette->color($bgColor[0], 100 - $bgColor[1]);
 			if (isset($cropBox))  { $bgBox = $cropBox; }
 			elseif (isset($farBox))  { $bgBox = $farBox; }
 			elseif (isset($imgBox))  { $bgBox = $imgBox; }
 			else  { $bgBox = new Box($width, $height); }
-			$image = $this->imagine->create($bgBox,	$this->palette->color($bgColor[0], 100 - $bgColor[1]))
-								   ->paste($image, isset($farPoint) ? $farPoint : $this->topLeft);
+			$image = $this->imagine
+							->create($bgBox, self::$palette->color($bgColor[0], 100 - $bgColor[1]))
+							->paste($image, isset($farPoint) ? $farPoint : self::$topLeft);
 		}
 
 /* debug info */
@@ -449,7 +456,10 @@ public function processImage($input, $output, $options = array()) {
 		}
 
 /* save */
-		$outputOpts = array('quality' => isset($options['q']) ? (int) $options['q'] : $this->defaultQuality);  // change 'q' to 'quality', or use default
+		$outputOpts = array(
+			'quality' => empty($options['q']) ? $this->defaultQuality : (int) $options['q'],  // change 'q' to 'quality', or use default
+			'format' => empty($options['f']) ? $outputType : $options['f']
+		);
 		$image->save($output, $outputOpts);
 		if (!$this->width)  { $this->width = $width; }
 		if (!$this->height)  { $this->height = $height; }
