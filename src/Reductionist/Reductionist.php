@@ -32,12 +32,12 @@ public $defaultQuality = 80;
 public $width;
 public $height;
 
+protected $imagine;
+protected $gLib;
 static protected $assetpaths;
 static protected $palette;
 static protected $topLeft;
 static protected $maxsize;
-protected $imagine;
-protected $gLib;
 
 /*
  * @param  int  $graphicsLib  (optional) specify a preferred graphics library
@@ -475,7 +475,7 @@ public function processImage($input, $output, $options = array()) {
 				$this->debugmessages[] = "JPEG prescale - w: $dcWidth | h: $dcHeight " . sprintf("(%2.2f MP)", $dcWidth * $dcHeight / 1e6);
 			}
 			if (isset($scBox)) {
-				$this->debugmessages[] = "Source area - start: ($cropStartX, $cropStartY) | box: {$scBox->getWidth()} x {$scBox->getHeight()}";
+				$this->debugmessages[] = "Source area - start: ($cropStartX, $cropStartY) | box: $scBox";
 			}
 			if (isset($wRequested)) {
 				$this->debugmessages[] = "Requested - w: " . round($wRequested) . ' | h: ' . round($hRequested);
@@ -484,10 +484,10 @@ public function processImage($input, $output, $options = array()) {
 				$this->debugmessages[] = "New - w: $width | h: $height" . ($didScale ? '' : ' [Not scaled: same size or insufficient input resolution]');
 			}
 			if (isset($farPoint)) {
-				$this->debugmessages[] = "FAR - start: ({$farPoint->getX()},{$farPoint->getY()}) | box: {$options['w']} x {$options['h']}";
+				$this->debugmessages[] = "FAR - start: $farPoint | box: {$options['w']}x{$options['h']} px";
 			}
 			if (isset($cropBox)) {
-				$this->debugmessages[] = "ZC - start: ({$cropStart->getX()},{$cropStart->getY()}) | box: {$cropBox->getWidth()} x {$cropBox->getHeight()}";
+				$this->debugmessages[] = "ZC - start: $cropStart | box: $cropBox";
 			}
 			if ($hasBG) {
 				$this->debugmessages[] = "Background color: {$bgColor[0]} | opacity: {$bgColor[1]}";
@@ -510,9 +510,9 @@ public function processImage($input, $output, $options = array()) {
 	}
 /* error handler */
 	catch(\Imagine\Exception\Exception $e) {
-		$this->debugmessages[] = '*** Error *** ' . $e->getMessage();
 		$this->debugmessages[] = "Input file: $input";
 		$this->debugmessages[] = 'Input options: ' . substr(var_export($inputParams['options'], true), 7, -3);
+		$this->debugmessages[] = '*** Error *** ' . $e->getMessage();
 		return false;
 	}
 
