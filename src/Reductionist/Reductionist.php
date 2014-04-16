@@ -118,10 +118,22 @@ protected function startPoint($opt, $containerDims, $imageDims) {
 		$x = $containerDims[0] - $imageDims[0];
 		$y = $containerDims[1] - $imageDims[1];
 	}
+	elseif (preg_match('/[0-9]x[0-9]/', $opt)) {  // user-supplied coordinate string: X x Y
+		$userCoords = explode('x', $opt);
+		for ($i = 0; $i < 2; ++$i) {
+			if ($imageDims[$i] + $userCoords[$i] > $containerDims[$i]) {  // make sure the box stays within the container
+				$userCoords[$i] = $containerDims[$i] - $imageDims[$i];
+			}
+			else { $userCoords[$i] = (int) $userCoords[$i]; }
+		}
+		list($x, $y) = $userCoords;
+	}
 	else {  // otherwise same as center
 		$x = (int) (($containerDims[0] - $imageDims[0]) / 2);
 		$y = (int) (($containerDims[1] - $imageDims[1]) / 2);
 	}
+	if ($x < 0)  { $x = 0; }
+	if ($y < 0)  { $y = 0; }
 	return new \Imagine\Image\Point($x, $y);
 }
 
