@@ -59,6 +59,11 @@ class RImagine
 	}
 
 
+	public function getImagine() {
+		return $this->imagine;
+	}
+
+
 	private function createPalette(\Imagick $magick) {
 		$cs = $magick->getImageColorspace();
 		if ($cs === \Imagick::COLORSPACE_SRGB || $cs === \Imagick::COLORSPACE_RGB)

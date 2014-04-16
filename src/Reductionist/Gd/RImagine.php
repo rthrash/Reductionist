@@ -43,6 +43,11 @@ class RImagine {
 	}
 
 
+	public function getImagine() {
+		return $this->imagine;
+	}
+
+
 	private function wrap($resource) {
 		if (!imageistruecolor($resource)) {
 			list($width, $height) = array(imagesx($resource), imagesy($resource));
