@@ -417,10 +417,15 @@ public function processImage($input, $output, $options = array()) {
 			if (!is_array($options['fltr'])) {
 				$options['fltr'] = array($options['fltr']);  // in case somebody did fltr= instead of fltr[]=
 			}
+			$transformation = new \Imagine\Filter\Transformation($this->imagine->getImagine());
+			$filterlog = array($this->debug);
 			foreach($options['fltr'] as $fltr) {
 				$filter = explode('|', $fltr);
 				if ($filter[0] === 'usm') {  // right now only unsharp mask is implemented, sort of
 					$image->effects()->sharpen();  // radius, amount and threshold are ignored!
+				}
+				elseif ($filter[0] === 'wmt' || $filter[0] === 'wmi') {
+					$transformation->add(new Filter\Watermark($filter, $filterlog));
 				}
 			}
 		}
@@ -443,6 +448,13 @@ public function processImage($input, $output, $options = array()) {
 			$image = $this->imagine
 							->create($bgBox, self::$palette->color($bgColor[0], 100 - $bgColor[1]))
 							->paste($image, isset($farPoint) ? $farPoint : self::$topLeft);
+		}
+
+		if (isset($transformation)) {  // apply any filters
+			try { $transformation->apply($image); }
+			catch (\Exception $e) {
+				$this->debugmessages[] = $e->getMessage();
+			}
 		}
 
 /* debug info */
@@ -479,6 +491,10 @@ public function processImage($input, $output, $options = array()) {
 			}
 			if ($hasBG) {
 				$this->debugmessages[] = "Background color: {$bgColor[0]} | opacity: {$bgColor[1]}";
+			}
+			if (isset($filterlog[1])) {
+				unset($filterlog[0]);
+				$this->debugmessages = array_merge($this->debugmessages, $filterlog);
 			}
 			$debugTime = microtime(true) - $debugTime;
 		}
