@@ -32,6 +32,7 @@ public $defaultQuality = 80;
 public $width;
 public $height;
 
+static protected $assetpaths;
 static protected $palette;
 static protected $topLeft;
 static protected $maxsize;
@@ -43,6 +44,7 @@ protected $gLib;
  *							  2: Auto/Gmagick, 1: Imagick, 0: GD
  */
 public function __construct($graphicsLib = 2) {
+	self::$assetpaths = array('/', __DIR__ . '/../resources/');
 	// Decide which graphics library to use and create the appropriate Imagine object
 	if ($graphicsLib > 1 && class_exists('Gmagick', false)) {
 		$this->debugmessages[] = 'Using Gmagick';
@@ -80,7 +82,7 @@ public function __construct($graphicsLib = 2) {
  *
  * Returns a Point with the coordinates of the top left corner
  */
-protected function startPoint($opt, $containerDims, $imageDims) {
+static public function startPoint($opt, $containerDims, $imageDims) {
 	$opt = strtolower($opt);
 	if ($opt == 1 || $opt === 'c') {  // center is most common
 		$x = (int) (($containerDims[0] - $imageDims[0]) / 2);
@@ -135,6 +137,20 @@ protected function startPoint($opt, $containerDims, $imageDims) {
 	if ($x < 0)  { $x = 0; }
 	if ($y < 0)  { $y = 0; }
 	return new \Imagine\Image\Point($x, $y);
+}
+
+
+static public function findFile($file) {
+	foreach(self::$assetpaths as $path) {
+		$search = $path . ltrim($file, '/');
+		if (is_readable($search)) { return realpath($search); }
+	}
+	return null;
+}
+
+
+static public function formatDebugArray($log) {
+	return substr(var_export($log, true), 7, -3);
 }
 
 
@@ -299,7 +315,7 @@ public function processImage($input, $output, $options = array()) {
 				$options['w'] = round($options['w']);
 				$options['h'] = round($options['h']);
 				if ($options['w'] > $width || $options['h'] > $height) {
-					$farPoint = $this->startPoint(
+					$farPoint = Reductionist::startPoint(
 						$options['far'],
 						array($options['w'], $options['h']),
 						array($width, $height)
@@ -340,7 +356,7 @@ public function processImage($input, $output, $options = array()) {
 				$newHeight = $height = round($height);
 			}
 
-			$cropStart = $this->startPoint(
+			$cropStart = Reductionist::startPoint(
 				$options['zc'],
 				array($newWidth, $newHeight),
 				array($width, $height)
@@ -432,13 +448,13 @@ public function processImage($input, $output, $options = array()) {
 /* debug info */
 		if ($this->debug) {
 			$debugTime = microtime(true);
-			$this->debugmessages[] = 'Input options:' . substr(var_export($inputParams['options'], true), 7, -3);  // print all options, stripping off array()
+			$this->debugmessages[] = 'Input options:' . self::formatDebugArray($inputParams['options']);  // print all options, stripping off array()
 			$changed = array();  // note any options which may have been changed during processing
 			foreach (array('w', 'h', 'scale', 'q') as $opt) {
 				if (isset($inputParams['options'][$opt]) && $inputParams['options'][$opt] != $options[$opt])  { $changed[$opt] = $options[$opt]; }
 			}
 			if ($changed) {
-				$this->debugmessages[] = 'Modified options:' . substr(var_export($changed, true), 7, -3);
+				$this->debugmessages[] = 'Modified options:' . self::formatDebugArray($changed, true);
 			}
 			$this->debugmessages[] = "Original - w: {$inputParams['width']} | h: {$inputParams['height']} " . sprintf("(%2.2f MP)", $inputParams['width'] * $inputParams['height'] / 1e6);
 			if (isset($decodersize)) {
