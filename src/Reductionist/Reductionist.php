@@ -280,11 +280,15 @@ public function processImage($input, $output, $options = array()) {
 		$newAR = $width / $height;
 
 /* scale */
-		if (!empty($options['scale'])) {
+		if (empty($options['scale'])) {
+			$requestedMP = $width * $height;  // we'll need this for quality scaling
+		}
+		else {
+			$requestedMP = $width * $options['scale'] * $height * $options['scale'];
 			if (empty($options['aoe'])) {  // if aoe is off, cap scale so image isn't enlarged
 				$hScale = $origHeight / $height;
 				$wScale = $origWidth / $width;
-				$wRequested = $width * $options['scale'];  // we'll need these for quality scaling
+				$wRequested = $width * $options['scale'];
 				$hRequested = $height * $options['scale'];
 				$options['scale'] = ($hScale > 1 && $wScale > 1) ? min($hScale, $wScale, $options['scale']) : 1;
 			}
@@ -400,13 +404,15 @@ public function processImage($input, $output, $options = array()) {
 			$image = $this->imagine->open($input);
 		}
 /* qmax */
-		elseif (isset($options['qmax']) && $outputIsJpg && empty($options['aoe']) && isset($options['q'])) {
+		elseif (isset($options['qmax']) && empty($options['aoe']) && isset($options['q']) && $outputIsJpg) {
 			// undersized input image. We'll increase q towards qmax depending on how much it's undersized
-			$sizeRatio = $origWidth * $origHeight / (isset($wRequested) ? ($wRequested * $hRequested) : ($width * $height));
-			if ($sizeRatio > 0.5) {  // if new image has more that 1/2 the resolution of the requested size
-				$options['q'] += round(($options['qmax'] - $options['q']) * (1 - $sizeRatio) * 2);
+			$sizeRatio = $requestedMP / (isset($cropBox) ? $this->width * $this->height : $width * $height);
+			if ($sizeRatio >= 3) {
+				$options['q'] = $options['qmax'];
 			}
-			else { $options['q'] = $options['qmax']; }  // otherwise qmax
+			elseif ($sizeRatio > 1) {
+				$options['q'] += round(($options['qmax'] - $options['q']) * ($sizeRatio - 1) / 2);
+			}
 		}
 
 /* crop */
