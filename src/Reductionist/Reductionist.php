@@ -21,8 +21,6 @@ namespace Reductionist;
  **/
 
 use Imagine\Image\Box;
-use Reductionist\Filter\Reduce;
-
 
 class Reductionist {
 
@@ -41,28 +39,29 @@ static protected $maxsize;
 
 /*
  * @param  int  $graphicsLib  (optional) specify a preferred graphics library
- *							  2: Auto/Gmagick, 1: Imagick, 0: GD
+ *							  2: Auto/Imagick, 1: Gmagick, 0: GD
  */
 public function __construct($graphicsLib = 2) {
 	self::$assetpaths = array('/', __DIR__ . '/../resources/');
 	// Decide which graphics library to use and create the appropriate Imagine object
-	if ($graphicsLib > 1 && class_exists('Gmagick', false)) {
-		$this->debugmessages[] = 'Using Gmagick';
-		self::$maxsize = null;
-		set_time_limit(0);
-		$this->imagine = new Gmagick\RImagine();
-		$this->gLib = 2;
-	}
-	elseif ($graphicsLib && class_exists('Imagick', false)) {
+	if ($graphicsLib > 1 && class_exists('Imagick', false)) {
 		$this->debugmessages[] = 'Using Imagick';
 		self::$maxsize = null;
-		set_time_limit(0);  // execution time accounting seems strange on some systems. Maybe because of multi-threading?
+		set_time_limit(0);
 		$this->imagine = new Imagick\RImagine();
+		$this->gLib = 2;
+	}
+	elseif ($graphicsLib && class_exists('Gmagick', false)) {
+		$this->debugmessages[] = 'Using Gmagick';
+		self::$maxsize = null;
+		set_time_limit(0);  // execution time accounting seems strange on some systems. Maybe because of multi-threading?
+		$this->imagine = new Gmagick\RImagine();
 		$this->gLib = 1;
 	}
 	else {  // good ol' GD
 		$this->debugmessages[] = 'Using GD';
-		$this->imagine = new Gd\RImagine();
+		$this->imagine = new \Imagine\Gd\Imagine();
+		$this->gLib = 0;
 		if (!isset(self::$maxsize)) {
 			self::$maxsize = ini_get('memory_limit');
 			$magnitude = strtoupper(substr(self::$maxsize, -1));
@@ -181,23 +180,14 @@ public function processImage($input, $output, $options = array()) {
 	$this->width = $this->height = null;
 	if (is_string($options))  { $options = parse_str($options); }  // convert an options string to an array if needed
 	$inputParams = array('options' => $options);
-	$inputIsJpg = stripos(pathinfo($input, PATHINFO_EXTENSION), 'jp') !== false;  // extension determines image format
-	$outputType = strtolower(pathinfo($output, PATHINFO_EXTENSION));
-	$outputIsJpg = strpos($outputType, 'jp') !== false;  // extension determines image format
+	$outputIsJpg = strncasecmp('jp', pathinfo($output, PATHINFO_EXTENSION), 2) === 0;
+
 	try {
 /* initial dimensions */
-		if ($inputIsJpg && $this->gLib) {
-			$image = null;
-			$size = getimagesize($input);
-			$origWidth = $inputParams['width'] = $size[0];
-			$origHeight = $inputParams['height'] = $size[1];
-		}
-		else {
 			$image = $this->imagine->open($input);
 			$size = $image->getSize();
 			$origWidth = $inputParams['width'] = $size->getWidth();
 			$origHeight = $inputParams['height'] = $size->getHeight();
-		}
 
 		if (self::$maxsize && $origWidth * $origHeight > self::$maxsize) {  // if we're using GD we need to check the image will fit in memory
 			$this->debugmessages[] = "GD: $input may exceed available memory  ** Skipping **";
@@ -234,10 +224,6 @@ public function processImage($input, $output, $options = array()) {
 					if ($cropStartY + $newHeight > $origHeight)  { $cropStartY = $origHeight - $newHeight; }
 				}
 				$scBox = new Box($newWidth, $newHeight);
-				if ($image) {
-					$scStart = new \Imagine\Image\Point($cropStartX, $cropStartY);
-					$image->crop($scStart, $scBox);
-				}
 				$origWidth = $newWidth;  // update input dimensions to the new cropped size
 				$origHeight = $newHeight;
 			}
@@ -297,7 +283,7 @@ public function processImage($input, $output, $options = array()) {
 		}
 
 		if (empty($options['zc']) || !$bothDims) {
-/* non-zc cropping */
+/* non-zc sizing */
 			if ($newAR < $origAR) {  // Make sure AR doesn't change. Smaller dimension...
 				if ($origWidth < $options['w'] && empty($options['aoe'])) {
 					$options['w'] = $width = $origWidth;
@@ -372,20 +358,15 @@ public function processImage($input, $output, $options = array()) {
 			$height = $newHeight;
 		}
 
-		if (isset($scBox) && !$image) {
+		if (isset($scBox)) {
 			$scale = max($width / $origWidth, $height / $origHeight);
-			if ($scale <= 0.5) {
+			if ($scale <= 0.5 && $this->gLib && $image->getFormat() === IMG_JPG) {
 				$scaleBox = new Box(round($inputParams['width'] * $scale), round($inputParams['height'] * $scale));
-				$image = $this->imagine->Ropen($input, $scaleBox);
-				if ($this->debug)  { $decodersize = $image->getSize(); }
-				$filter = new Reduce($scaleBox);
-				$image = $filter->apply($image);
-				$scBox = $scBox->scale($scale);
+				$image->resize($scaleBox);
 				$scStart = new \Imagine\Image\Point(round($cropStartX * $scale), round($cropStartY * $scale));
 			}
 			else {
 				$scStart = new \Imagine\Image\Point($cropStartX, $cropStartY);
-				$image = $this->imagine->open($input);
 			}
 			$image->crop($scStart, $scBox);
 		}
@@ -393,16 +374,9 @@ public function processImage($input, $output, $options = array()) {
 /* resize, aoe */
 		if ( $didScale = ($width < $origWidth && $height < $origHeight) || !empty($options['aoe']) ) {
 			$imgBox = new Box($width, $height);
-			if (!$image) {
-				$image = $this->imagine->Ropen($input, $imgBox);
-				if ($this->debug)  { $decodersize = $image->getSize(); }
-			}
-			$filter = new Reduce($imgBox);
-			$image = $filter->apply($image);
+			$image->resize($imgBox);
 		}
-		elseif (!$image) {
-			$image = $this->imagine->open($input);
-		}
+
 /* qmax */
 		elseif (isset($options['qmax']) && empty($options['aoe']) && isset($options['q']) && $outputIsJpg) {
 			// undersized input image. We'll increase q towards qmax depending on how much it's undersized
@@ -423,7 +397,7 @@ public function processImage($input, $output, $options = array()) {
 			if (!is_array($options['fltr'])) {
 				$options['fltr'] = array($options['fltr']);  // in case somebody did fltr= instead of fltr[]=
 			}
-			$transformation = new \Imagine\Filter\Transformation($this->imagine->getImagine());
+			$transformation = new \Imagine\Filter\Transformation($this->imagine);
 			$filterlog = array($this->debug);
 			foreach($options['fltr'] as $fltr) {
 				$filter = explode('|', $fltr);
@@ -453,11 +427,13 @@ public function processImage($input, $output, $options = array()) {
 			else  { $bgBox = new Box($width, $height); }
 			$image = $this->imagine
 							->create($bgBox, self::$palette->color($bgColor[0], 100 - $bgColor[1]))
-							->paste($image, isset($farPoint) ? $farPoint : self::$topLeft);
+							->paste($this->gLib ? $image->getImage() : $image, isset($farPoint) ? $farPoint : self::$topLeft);
 		}
 
 		if (isset($transformation)) {  // apply any filters
-			try { $transformation->apply($image); }
+			try {
+				$transformation->apply($image);
+			}
 			catch (\Exception $e) {
 				$this->debugmessages[] = $e->getMessage();
 			}
@@ -475,10 +451,8 @@ public function processImage($input, $output, $options = array()) {
 				$this->debugmessages[] = 'Modified options:' . self::formatDebugArray($changed, true);
 			}
 			$this->debugmessages[] = "Original - w: {$inputParams['width']} | h: {$inputParams['height']} " . sprintf("(%2.2f MP)", $inputParams['width'] * $inputParams['height'] / 1e6);
-			if (isset($decodersize)) {
-				$dcWidth = $decodersize->getWidth();
-				$dcHeight = $decodersize->getHeight();
-				$this->debugmessages[] = "JPEG prescale - w: $dcWidth | h: $dcHeight " . sprintf("(%2.2f MP)", $dcWidth * $dcHeight / 1e6);
+			if (isset($image->prescalesize)) {
+				$this->debugmessages[] = "JPEG prescale - w: {$image->prescalesize[0]} | h: {$image->prescalesize[1]} " . sprintf("(%2.2f MP)", $image->prescalesize[0] * $image->prescalesize[1] / 1e6);
 			}
 			if (isset($scBox)) {
 				$this->debugmessages[] = "Source area - start: ($cropStartX, $cropStartY) | box: $scBox";
@@ -498,18 +472,16 @@ public function processImage($input, $output, $options = array()) {
 			if ($hasBG) {
 				$this->debugmessages[] = "Background color: {$bgColor[0]} | opacity: {$bgColor[1]}";
 			}
-			if (isset($filterlog[1])) {
-				unset($filterlog[0]);
-				$this->debugmessages = array_merge($this->debugmessages, $filterlog);
-			}
 			$debugTime = microtime(true) - $debugTime;
+		}
+		if (isset($filterlog[1])) {  // add any filter debug output
+			unset($filterlog[0]);
+			$this->debugmessages = array_merge($this->debugmessages, $filterlog);
 		}
 
 /* save */
-		$outputOpts = array(
-			'quality' => empty($options['q']) ? $this->defaultQuality : (int) $options['q'],  // change 'q' to 'quality', or use default
-			'format' => empty($options['f']) ? $outputType : $options['f']
-		);
+		$outputOpts = array('quality' => empty($options['q']) ? $this->defaultQuality : (int) $options['q']);  // change 'q' to 'quality', or use default
+		if (!empty($options['f'])) { $outputOpts['format'] = $options['f']; }
 		$image->save($output, $outputOpts);
 		if (!$this->width)  { $this->width = $width; }
 		if (!$this->height)  { $this->height = $height; }

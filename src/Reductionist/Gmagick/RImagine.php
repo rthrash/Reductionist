@@ -1,59 +1,27 @@
 <?php
 namespace Reductionist\Gmagick;
 
-use Imagine\Gmagick\Imagine;
-use Imagine\Gmagick\Image;
-
 use Imagine\Image\BoxInterface;
-use Imagine\Image\Box;
-use Imagine\Image\Metadata\MetadataBag;
 use Imagine\Image\Palette\Color\ColorInterface;
 use Imagine\Image\Palette\RGB;
+use Imagine\Image\ImagineInterface;
+use Imagine\Image\Metadata\MetadataBag;
 
 
-class RImagine
+class RImagine implements ImagineInterface
 {
-	protected $imagine;
-	protected $nullBox;
-	protected $emptyBag;
-	protected $rgb;
+	static protected $rgb;
+	static protected $emptyBag;
 
 
 	public function __construct() {
-		$this->imagine = new Imagine();
-		$this->nullBox = new Box(1, 1);
-		$this->emptyBag = new MetadataBag();
-		$this->rgb = new RGB();
-	}
-
-
-	public function __call($method, $args) {
-		return call_user_func_array(array($this->imagine, $method), $args);
+		self::$rgb = new RGB();
+		self::$emptyBag = new MetadataBag();
 	}
 
 
 	public function open($path) {
-		return $this->Ropen($path, $this->nullBox);
-	}
-
-
-	public function Ropen($path, BoxInterface $size) {
-		if (!is_readable($path)) {
-			throw new InvalidArgumentException(sprintf('File %s is not readable', $path));
-		}
-
-		try {
-			$magick = new \Gmagick();
-			if ($size !== $this->nullBox) {
-				$magick->setSize($size->getWidth(), $size->getHeight());
-			}
-			$magick->readimage($path);
-		}
-		catch (\Exception $e) {
-			throw new \Imagine\Exception\RuntimeException("Gmagick: Unable to open image $path. {$e->getMessage()}", $e->getCode(), $e);
-		}
-
-		return new Image($magick, $this->createPalette($magick), $this->emptyBag);
+		return new RImage($path, self::$rgb, self::$emptyBag);
 	}
 
 
@@ -62,21 +30,25 @@ class RImagine
 		$height = $size->getHeight();
 
 		if ($color === null) {
-			$palette = $this->rgb;
-			$color = $palette->color('fff');
+			$palette = self::$rgb;
+			$color = '#ffffff';
+			$alpha = 0;
 		}
-		else { $palette = $color->getPalette(); }
+		else {
+			$palette = $color->getPalette();
+			$alpha = $color->getAlpha() / 100;
+		}
 
 		try {
 			$pixel = new \GmagickPixel((string) $color);
-			$pixel->setColorValue(\Gmagick::COLOR_OPACITY, $color->getAlpha() / 100);  // does nothing as of Gmagick 1.1.7RC2.  Background will be fully opaque.
+			$pixel->setcolorvalue(\Gmagick::COLOR_OPACITY, $alpha);  // does nothing as of Gmagick 1.1.7RC2.  Background will be fully opaque.
 
 			$magick = new \Gmagick();
-			$magick->newImage($width, $height, $pixel->getcolor(false));
+			$magick->newimage($width, $height, $pixel->getcolor(false));
 			$magick->setimagecolorspace(\Gmagick::COLORSPACE_TRANSPARENT);
-			$magick->setImageBackgroundColor($pixel);
+			$magick->setimagebackgroundcolor($pixel);
 
-			return new Image($magick, $palette, $this->emptyBag);
+			return new RImage($magick, $palette, self::$emptyBag, array($width, $height));
 		}
 		catch (\Exception $e) {
 			throw new \Imagine\Exception\RuntimeException('Gmagick: could not create empty image. ' . $e->getMessage(), $e->getCode(), $e);
@@ -84,21 +56,68 @@ class RImagine
 	}
 
 
-	public function getImagine() {
-		return $this->imagine;
-	}
-
-
-	private function createPalette(\Gmagick $magick) {
-		$cs = $magick->getImageColorspace();
+	static public function createPalette($cs) {
 		if ($cs === \Gmagick::COLORSPACE_SRGB || $cs === \Gmagick::COLORSPACE_RGB)
-			return $this->rgb;
+			return self::$rgb;
 		elseif ($cs === \Gmagick::COLORSPACE_CMYK)
 			return new \Imagine\Image\Palette\CMYK();
 		elseif ($cs === \Gmagick::COLORSPACE_GRAY)
 			return new \Imagine\Image\Palette\Grayscale();
+		else
+			throw new \Imagine\Exception\RuntimeException('Gmagick: Only RGB, CMYK and Grayscale colorspaces are curently supported');
+	}
 
-		throw new \Imagine\Exception\RuntimeException('Gmagick: Only RGB, CMYK and Grayscale colorspaces are curently supported');
+
+	static public function getColor($color) {
+		if ($color === null) {
+			$palette = self::$rgb;
+			$color = '#ffffff';
+			$alpha = 0;
+		}
+		else {
+			$palette = $color->getPalette();
+			$alpha = $color->getAlpha() / 100;
+		}
+		return array(
+			'palette' => $palette,
+			'color' => (string) $color,
+			'alpha' => $alpha
+		);
+	}
+
+
+	public function load($string) {
+		try {
+			$magick = new \Gmagick();
+			$magick->readimageblob($string);
+			$palette = self::createPalette($magick->getImageColorspace());
+		}
+		catch (\GmagickException $e) {
+			throw new RuntimeException('Gmagick: Could not load image from string. ' . $e->getMessage(), $e->getCode(), $e);
+		}
+		return new RImage($magick, $palette, self::$emptyBag);
+	}
+
+
+	public function read($resource) {
+		if (!is_resource($resource)) {
+			throw new InvalidArgumentException('Variable does not contain a stream resource');
+		}
+
+		$content = stream_get_contents($resource);
+
+		if (false === $content) {
+			throw new InvalidArgumentException('Gmagick: Couldn\'t read given resource');
+		}
+
+		return $this->load($content);
+	}
+
+
+	public function font($file, $size, ColorInterface $color) {
+		$magick = new \Gmagick();
+		$magick->newimage(1, 1, 'transparent');
+		return new \Imagine\Gmagick\Font($magick, $file, $size, $color);
 	}
 
 }

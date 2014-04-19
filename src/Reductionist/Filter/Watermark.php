@@ -29,6 +29,12 @@ class Watermark extends ImagineAware {
 
 	public function apply(ImageInterface $image) {
 		$imagine = $this->getImagine();
+		$class = get_class($image);
+		$isRImage = strpos($class, 'RImage');
+		$isGmagick = strpos($class, 'Gmagick');
+		/* Unfortunately Gmagick doesn't support opacity, so that's out for text
+		   and watermark images. Also watermark images need opacity in order to
+		   be rotated */
 
 		if ($this->opt[0] === 'wmt') {
 /* Text Watermark */
@@ -45,7 +51,7 @@ class Watermark extends ImagineAware {
 				'color' => empty($this->opt[4]) ? '000' : $this->opt[4],  // color (hex)
 				'opacity' => empty($this->opt[6]) ? 100 : (int) $this->opt[6],  // opacity
 				'margin' => empty($this->opt[7]) ? 3 : $this->opt[7],  // margin from the edge / bg box padding ( < 1 : percent, >= 1 : pixels)
-				'angle' => empty($this->opt[8]) ? 0 : (float) $this->opt[8],  // NOT FULLY IMPLEMENTED YET
+				'angle' => empty($this->opt[8]) ? 0 : (float) $this->opt[8],
 				'bgcolor' => empty($this->opt[9]) ? null : $this->opt[9],  // default is no bg box
 				'bgopacity' => empty($this->opt[10]) ? 100 : $this->opt[10]
 			);
@@ -55,10 +61,11 @@ class Watermark extends ImagineAware {
 
 			if ($this->debug) { $this->debugmessages[] = Reductionist::formatDebugArray($p); }
 
+			$alpha = $isGmagick ? 0 : 100 - $p['opacity'];
 			try {
 				// Set up font and bounding box
-				$font = $imagine->font($p['fontfile'], $p['fontsize'], self::$rgb->color($p['color'], 100 - $p['opacity']));
-				$wmBox = $font->box($p['text'], $p['angle']);
+				$font = $imagine->font($p['fontfile'], $p['fontsize'], self::$rgb->color($p['color'], $alpha));
+				$wmBox = $font->box($p['text'], $p['bgcolor'] === null ? $p['angle'] : 0);
 				$wmWidth = $wmBox->getWidth();
 				$wmHeight = $wmBox->getHeight();
 
@@ -89,40 +96,59 @@ class Watermark extends ImagineAware {
 					if ($this->debug) { $this->debugmessages[] = "* Text watermark overflow: vertical margin reduced to {$paddingY}px"; }
 				}
 
-				$wmbgStartPoint = Reductionist::startPoint(  // Calculate top left coordinates for bg box
-					$p['alignment'],
-					array($imgWidth, $imgHeight),
-					array($wmbgWidth, $wmbgHeight)
-				);
-
+				$doRotate = !$isGmagick && $p['angle'] % 360;
+				if ($doRotate && $p['bgcolor'] === null && $isRImage) {  // if text will be rotated, use a transparent bg for better positioning
+					$p['bgcolor'] = '#ffffff';
+					$p['bgopacity'] = 0;
+				}
 				if ($p['bgcolor']) {  // if we have a bg color, add a bg box
 					$wmbg = $imagine->create(  // create watermark background
 						new Box($wmbgWidth, $wmbgHeight),
 						self::$rgb->color($p['bgcolor'], 100 - $p['bgopacity'])
 					);
-					$wmbg->draw()->text($p['text'], $font, new Point($paddingX, $paddingY), $p['angle']);  // add text
+					$wmbg->draw()->text($p['text'], $font, new Point($paddingX, $paddingY), 0);  // add text
+					if ($doRotate) {
+						$wmbg->rotate($p['angle'], self::$rgb->color('#fff', 100));
+						$wmbgSize = $wmbg->getSize();
+						$wmbgWidth = $wmbgSize->getWidth();
+						$wmbgHeight = $wmbgSize->getHeight();
+					}
 					if ($wmbgWidth > $imgWidth || $wmbgHeight > $imgHeight) {  // if the box overflows the image...
+						$wmbgWidth = $wmbgWidth > $imgWidth ? $imgWidth : $wmbgWidth;
+						$wmbgHeight = $wmbgHeight > $imgHeight ? $imgHeight : $wmbgHeight;
 						$wmbg->crop(new Point(0, 0), new Box(  // ...crop it to fit
-							$wmbgWidth > $imgWidth ? $imgWidth : $wmbgWidth,
-							$whbgHeight > $imgHeight ? $imgHeight : $wmbgHeight
+							$wmbgWidth,
+							$wmbgHeight
 						));
 					}
+					$wmbgStartPoint = Reductionist::startPoint(  // Calculate top left coordinates for bg box
+						$p['alignment'],
+						array($imgWidth, $imgHeight),
+						array($wmbgWidth, $wmbgHeight)
+					);
 					if ($this->debug) {
 						$this->debugmessages[] = ":: Text watermark with background: {$wmbgWidth}x$wmbgHeight px @ $wmbgStartPoint";
 					}
-					$image->paste($wmbg, $wmbgStartPoint);  // add to image
+					$image->paste($isRImage ? $wmbg->getImage() : $wmbg, $wmbgStartPoint);  // add to image
 				}
 				else {  // otherwise simply add text
+					$wmbgStartPoint = Reductionist::startPoint(  // Calculate top left coordinates for bg box
+						$p['alignment'],
+						array($imgWidth, $imgHeight),
+						array($wmbgWidth, $wmbgHeight)
+					);
 					$wmStartPoint = new Point($wmbgStartPoint->getX() + $paddingX, $wmbgStartPoint->getY() + $paddingY);
 					if ($this->debug) { $this->debugmessages[] = ":: Text watermark: $wmBox @ $wmStartPoint"; }
 					$image->draw()->text($p['text'], $font, $wmStartPoint, $p['angle']);  // add to Image
 				}
 			}
 			catch(\Exception $e) {
-				throw new \Imagine\Exception\RuntimeException('*** Text Watermark Error: ' . $e->getMessage());
+				$this->debugmessages[] = '*** Text Watermark Error: ' . $e->getMessage();
+				return $image;
 			}
 
 		}
+
 		elseif ($this->opt[0] === 'wmi') {
 /* Image Watermark */
 			$this->debugmessages[] = 'Filter :: Image Watermark';
@@ -131,7 +157,8 @@ class Watermark extends ImagineAware {
 			}
 
 			if (null === $file = Reductionist::findFile($this->opt[1])) {  // error out if we can't find the file
-				throw new \Imagine\Exception\RuntimeException("*** Image Watermark Error: {$this->opt[1]} not found");
+				$this->debugmessages[] = "*** Image Watermark Error: {$this->opt[1]} not found";
+				return $image;
 			}
 
 			// Initialize parameters
@@ -156,7 +183,8 @@ class Watermark extends ImagineAware {
 				$wmWidth = $wmSize->getWidth();
 				$wmHeight = $wmSize->getHeight();
 
-				if ($p['angle'] % 360) {  // calculate bounding box for rotated image
+				$doRotate = !$isGmagick && $p['angle'] % 360;
+				if ($doRotate) {  // calculate bounding box for rotated image
 					$rads = deg2rad($p['angle']);
 					$sin = sin($rads);
 					$cos = cos($rads);
@@ -168,19 +196,25 @@ class Watermark extends ImagineAware {
 				}
 
 				if ($wmWidth > $imgWidth || $wmHeight > $imgHeight) {  // scale watermark down if it's bigger than the image
-					$wm = $wm->thumbnail($imgSize);
+					$wm->thumbnail($imgSize);
 					$wmSize = $wm->getSize();
-					if ($this->debug) { $this->debugmessages[] = ":: Image watermark size reduced to $wmSize"; }
+					if ($this->debug) {
+						if (!empty($wm->prescalesize)) {
+							$this->debugmessages[] = ":: Image watermark prescale: " . $wm->getPrescaleSize();
+						}
+						$this->debugmessages[] = ":: Image watermark size reduced to $wmSize";
+					}
 				}
 
 				// Opacity
-				if ($p['opacity'] < 100) {
+				if (!$isGmagick && $p['opacity'] < 100) {
 					$a = round((100 - $p['opacity']) * 2.55);  // calculate alpha (0:opaque - 255:transparent)
-					$wm->applyMask( $imagine->create($wmSize, self::$rgb->color(array($a, $a, $a))) );
+					$mask = $imagine->create($wmSize, self::$rgb->color(array($a, $a, $a)));
+					$wm->applyMask($isRImage ? $mask->getImage() : $mask);
 				}
 
 				// Rotation
-				if ($p['angle'] % 360) {
+				if ($doRotate) {
 					$wm->rotate($p['angle'], self::$rgb->color('#fff', 100));
 					$wmSize = $wm->getSize();
 					if ($wmSize->getWidth() > $imgWidth || $wmSize->getHeight() > $imgHeight) {  // one more check. Shouldn't be necessary, but it sometimes is
@@ -221,12 +255,14 @@ class Watermark extends ImagineAware {
 
 				if ($this->debug) {
 					$this->debugmessages[] = ":: Image watermark: $wmSize @ $wmStartPoint";
+
 				}
 
-				$image->paste($wm, $wmStartPoint);
+				$image->paste($isRImage ? $wm->getImage() : $wm, $wmStartPoint);
 			}
 			catch(\Exception $e) {
-				throw new \Imagine\Exception\RuntimeException('*** Image Watermark Error: ' . $e->getMessage());
+				$this->debugmessages[] = '*** Image Watermark Error: ' . $e->getMessage();
+				return $image;
 			}
 		}
 
