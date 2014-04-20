@@ -38,14 +38,8 @@ class Watermark extends ImagineAware {
 
 		if ($this->opt[0] === 'wmt') {
 /* Text Watermark */
-			$this->debugmessages[] = 'Filter :: Text Watermark';
-			if (empty($this->opt[1])) {  // no text, so quit
-				return $image;
-			}
-
-			// Initialize parameters
-			$p = array(
-				'text' => $this->opt[1],
+			$p = array(  // Initialize parameters
+				'text' => empty($this->opt[1]) ? '' : $this->opt[1],
 				'fontsize' => empty($this->opt[2]) ? 12 : (int) $this->opt[2],  // in points
 				'alignment' => empty($this->opt[3]) ? 'C' : $this->opt[3],  // TL, T, TR, C, etc.
 				'color' => empty($this->opt[4]) ? '000' : $this->opt[4],  // color (hex)
@@ -59,7 +53,11 @@ class Watermark extends ImagineAware {
 				$p['fontfile'] = realpath(__DIR__ . '/../resources/FiraSansOT-Medium.otf');  // default to included Fira Sans
 			}
 
-			if ($this->debug) { $this->debugmessages[] = Reductionist::formatDebugArray($p); }
+			if ($this->debug) { $this->debugmessages[] = 'Filter :: Text Watermark' . Reductionist::formatDebugArray($p); }
+
+			if (empty($p['text'])) {  // no text, so quit
+				return $image;
+			}
 
 			$alpha = $isGmagick ? 0 : 100 - $p['opacity'];
 			try {
@@ -88,12 +86,12 @@ class Watermark extends ImagineAware {
 				if ($wmbgWidth > $imgWidth) {
 					$paddingX = max(round(($imgWidth - $wmWidth) / 2), 0);
 					$wmbgWidth = $wmWidth + (2 * $paddingX);
-					if ($this->debug) { $this->debugmessages[] = "* Text watermark overflow: horizontal margin reduced to {$paddingX}px"; }
+					if ($this->debug) { $this->debugmessages[] = ":: Text watermark overflow: horizontal margin reduced to {$paddingX}px"; }
 				}
 				if ($wmbgHeight > $imgHeight) {
 					$paddingY = max(round(($imgHeight - $wmHeight) / 2), 0);
 					$wmbgHeight = $wmHeight + (2 * $paddingY);
-					if ($this->debug) { $this->debugmessages[] = "* Text watermark overflow: vertical margin reduced to {$paddingY}px"; }
+					if ($this->debug) { $this->debugmessages[] = ":: Text watermark overflow: vertical margin reduced to {$paddingY}px"; }
 				}
 
 				$doRotate = !$isGmagick && $p['angle'] % 360;
@@ -151,18 +149,8 @@ class Watermark extends ImagineAware {
 
 		elseif ($this->opt[0] === 'wmi') {
 /* Image Watermark */
-			$this->debugmessages[] = 'Filter :: Image Watermark';
-			if (empty($this->opt[1])) {  // no image, so quit
-				return $image;
-			}
-
-			if (null === $file = Reductionist::findFile($this->opt[1])) {  // error out if we can't find the file
-				$this->debugmessages[] = "*** Image Watermark Error: {$this->opt[1]} not found";
-				return $image;
-			}
-
-			// Initialize parameters
-			$p = array(
+			$file = empty($this->opt[1]) ? null : Reductionist::findFile($this->opt[1]);
+			$p = array(  // Initialize parameters
 				'file' => $file,
 				'alignment' => empty($this->opt[2]) ? 'C' : $this->opt[2],  // TL, T, TR, C, etc.
 				'opacity' => empty($this->opt[3]) ? 100 : $this->opt[3],  // opacity
@@ -171,7 +159,11 @@ class Watermark extends ImagineAware {
 				'angle' => empty($this->opt[6]) ? 0 : $this->opt[6]
 			);
 
-			if ($this->debug) { $this->debugmessages[] = Reductionist::formatDebugArray($p); }
+			if ($this->debug) { $this->debugmessages[] = 'Filter :: Image Watermark' . Reductionist::formatDebugArray($p); }
+			if ($file === null) {
+				$this->debugmessages[] = '*** Image Watermark Error: ' . (empty($this->opt[1]) ? 'no image specified' : "{$this->opt[1]} not found");
+				return $image;
+			}
 
 			try {
 				$imgSize = $image->getSize();
@@ -220,7 +212,7 @@ class Watermark extends ImagineAware {
 					if ($wmSize->getWidth() > $imgWidth || $wmSize->getHeight() > $imgHeight) {  // one more check. Shouldn't be necessary, but it sometimes is
 						$wm = $wm->thumbnail(new Box($imgWidth, $imgHeight));
 						$wmSize = $wm->getSize();
-						if ($this->debug) { $this->debugmessages[] = "* Image watermark size reduced to $wmSize"; }
+						if ($this->debug) { $this->debugmessages[] = ":: Image watermark size reduced to $wmSize"; }
 					}
 				}
 
@@ -232,14 +224,14 @@ class Watermark extends ImagineAware {
 					if ($p['x'] < 1) { $p['x'] = round($imgWidth * $p['x']); }
 					if (2 * $p['x'] + $wmWidth - $imgWidth > 0) {  // reduce if necessary
 						$p['x'] = (int) (($imgWidth - $wmWidth) / 2);
-						if ($this->debug) { $this->debugmessages[] = "* Image watermark X margin reduced to {$p['x']} px"; }
+						if ($this->debug) { $this->debugmessages[] = ":: Image watermark X margin reduced to {$p['x']} px"; }
 					}
 				}
 				if ($p['y']) {
 					if ($p['y'] < 1) { $p['y'] = round($imgHeight * $p['y']); }
 					if (2 * $p['y'] + $wmHeight - $imgHeight > 0) {
 						$p['y'] = (int) (($imgHeight - $wmHeight) / 2);
-						if ($this->debug) { $this->debugmessages[] = "* Image watermark Y margin reduced to {$p['y']} px"; }
+						if ($this->debug) { $this->debugmessages[] = ":: Image watermark Y margin reduced to {$p['y']} px"; }
 					}
 				}
 
