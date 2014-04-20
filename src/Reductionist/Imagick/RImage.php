@@ -71,7 +71,7 @@ class RImage extends RAbstractImage
 			$magick->setImagePage(0, 0, 0, 0);  // reset canvas position
 		}
 		catch (\ImagickException $e) {
-			throw new RuntimeException('Imagick: Rotate operation failed', $e->getCode(), $e);
+			throw new \Imagine\Exception\RuntimeException('Imagick: Rotate operation failed. ' . $e->getMessage(), $e->getCode(), $e);
 		}
 
 		$this->size = array($magick->getImageWidth(), $magick->getImageHeight());

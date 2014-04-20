@@ -44,10 +44,10 @@ class Watermark extends ImagineAware {
 				'alignment' => empty($this->opt[3]) ? 'C' : $this->opt[3],  // TL, T, TR, C, etc.
 				'color' => empty($this->opt[4]) ? '000' : $this->opt[4],  // color (hex)
 				'opacity' => empty($this->opt[6]) ? 100 : (int) $this->opt[6],  // opacity
-				'margin' => empty($this->opt[7]) ? 3 : $this->opt[7],  // margin from the edge / bg box padding ( < 1 : percent, >= 1 : pixels)
+				'margin' => empty($this->opt[7]) ? 3 : (float) $this->opt[7],  // margin from the edge / bg box padding ( < 1 : percent, >= 1 : pixels)
 				'angle' => empty($this->opt[8]) ? 0 : (float) $this->opt[8],
 				'bgcolor' => empty($this->opt[9]) ? null : $this->opt[9],  // default is no bg box
-				'bgopacity' => empty($this->opt[10]) ? 100 : $this->opt[10]
+				'bgopacity' => empty($this->opt[10]) ? 100 : (int) $this->opt[10]
 			);
 			if (empty($this->opt[5]) || null === $p['fontfile'] = Reductionist::findFile($this->opt[5])) {  // font file
 				$p['fontfile'] = realpath(__DIR__ . '/../resources/FiraSansOT-Medium.otf');  // default to included Fira Sans
@@ -153,10 +153,10 @@ class Watermark extends ImagineAware {
 			$p = array(  // Initialize parameters
 				'file' => $file,
 				'alignment' => empty($this->opt[2]) ? 'C' : $this->opt[2],  // TL, T, TR, C, etc.
-				'opacity' => empty($this->opt[3]) ? 100 : $this->opt[3],  // opacity
-				'x' => empty($this->opt[4]) ? 0 : $this->opt[4],  // margin X
-				'y' => empty($this->opt[5]) ? 0 : $this->opt[5],  // margin Y
-				'angle' => empty($this->opt[6]) ? 0 : $this->opt[6]
+				'opacity' => empty($this->opt[3]) ? 100 : (int) $this->opt[3],  // opacity
+				'x' => empty($this->opt[4]) ? 0 : (float) $this->opt[4],  // margin X
+				'y' => empty($this->opt[5]) ? 0 : (float) $this->opt[5],  // margin Y
+				'angle' => empty($this->opt[6]) ? 0 : (float) $this->opt[6]
 			);
 
 			if ($this->debug) { $this->debugmessages[] = 'Filter :: Image Watermark' . Reductionist::formatDebugArray($p); }

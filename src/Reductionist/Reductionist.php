@@ -5,19 +5,6 @@ namespace Reductionist;
  * Copyright 2014 Jason Grant
  * Please see the GitHub page for documentation or to report bugs:
  * https://github.com/oo12/Reductionist
- *
- * Reductionist is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the Free
- * Software Foundation; either version 2 of the License, or (at your option) any
- * later version.
- *
- * Reductionist is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with
- * Reductionist; if not, write to the Free Software Foundation, Inc., 59 Temple
- * Place, Suite 330, Boston, MA 02111-1307 USA
  **/
 
 use Imagine\Image\Box;
@@ -42,7 +29,7 @@ static protected $maxsize;
  *							  2: Auto/Imagick, 1: Gmagick, 0: GD
  */
 public function __construct($graphicsLib = 2) {
-	self::$assetpaths = array('/', __DIR__ . '/../resources/');
+	self::$assetpaths = array('/', __DIR__ . '/resources/');
 	// Decide which graphics library to use and create the appropriate Imagine object
 	if ($graphicsLib > 1 && class_exists('Imagick', false)) {
 		$this->debugmessages[] = 'Using Imagick';
@@ -405,6 +392,7 @@ public function processImage($input, $output, $options = array()) {
 					$image->effects()->sharpen();  // radius, amount and threshold are ignored!
 				}
 				elseif ($filter[0] === 'wmt' || $filter[0] === 'wmi') {
+					$doApply = true;
 					$transformation->add(new Filter\Watermark($filter, $filterlog));
 				}
 			}
@@ -426,11 +414,11 @@ public function processImage($input, $output, $options = array()) {
 			elseif (isset($imgBox))  { $bgBox = $imgBox; }
 			else  { $bgBox = new Box($width, $height); }
 			$image = $this->imagine
-							->create($bgBox, self::$palette->color($bgColor[0], 100 - $bgColor[1]))
-							->paste($this->gLib ? $image->getImage() : $image, isset($farPoint) ? $farPoint : self::$topLeft);
+				->create($bgBox, self::$palette->color($bgColor[0], 100 - $bgColor[1]))
+				->paste($this->gLib ? $image->getImage() : $image, isset($farPoint) ? $farPoint : self::$topLeft);
 		}
 
-		if (isset($transformation)) {  // apply any filters
+		if (isset($transformation) && !empty($doApply)) {  // apply any filters
 			try {
 				$transformation->apply($image);
 			}
