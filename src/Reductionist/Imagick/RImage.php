@@ -86,7 +86,8 @@ class RImage extends RAbstractImage
 		try {
 			$magick = new \Imagick();
 			if ($this->format === IMG_JPG && $size !== null) {
-				$magick->setOption('jpeg:size', $size[0] . 'x' . $size[1]);
+				$magick->setOption('jpeg:size', $size[0] . 'x' . $size[1]);  // some versions of Imagick only respond to this...
+				$magick->setSize($size[0], $size[1]);  // ...and others to this
 			}
 			$magick->readImageFile($handle);
 			$magick->setImageFilename($this->filename);
