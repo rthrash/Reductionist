@@ -407,7 +407,7 @@ public function processImage($input, $output, $options = array()) {
 				$bgColor = explode('/', $options['bg']);
 				$bgColor[1] = isset($bgColor[1]) ? $bgColor[1] : 100;
 			}
-			else  { $bgColor = array('ffffff', 100); }
+			else  { $bgColor = array(array(255, 255, 255), 100); }
 
 			$backgroundColor = self::$palette->color($bgColor[0], 100 - $bgColor[1]);
 			if (isset($cropBox))  { $bgBox = $cropBox; }

@@ -96,7 +96,7 @@ class Watermark extends ImagineAware {
 
 				$doRotate = !$isGmagick && $p['angle'] % 360;
 				if ($doRotate && $p['bgcolor'] === null && $isRImage) {  // if text will be rotated, use a transparent bg for better positioning
-					$p['bgcolor'] = '#ffffff';
+					$p['bgcolor'] = array(255, 255, 255);
 					$p['bgopacity'] = 0;
 				}
 				if ($p['bgcolor']) {  // if we have a bg color, add a bg box
@@ -106,7 +106,7 @@ class Watermark extends ImagineAware {
 					);
 					$wmbg->draw()->text($p['text'], $font, new Point($paddingX, $paddingY), 0);  // add text
 					if ($doRotate) {
-						$wmbg->rotate($p['angle'], self::$rgb->color('#fff', 100));
+						$wmbg->rotate($p['angle'], self::$rgb->color(array(255, 255, 255), 100));
 						$wmbgSize = $wmbg->getSize();
 						$wmbgWidth = $wmbgSize->getWidth();
 						$wmbgHeight = $wmbgSize->getHeight();
@@ -211,7 +211,7 @@ class Watermark extends ImagineAware {
 
 				// Rotation
 				if ($doRotate) {
-					$wm->rotate($p['angle'], self::$rgb->color('#fff', 100));
+					$wm->rotate($p['angle'], self::$rgb->color(array(255, 255, 255), 100));
 					$wmSize = $wm->getSize();
 					if ($wmSize->getWidth() > $imgWidth || $wmSize->getHeight() > $imgHeight) {  // one more check. Shouldn't be necessary, but it sometimes is
 						$wm = $wm->thumbnail(new Box($imgWidth, $imgHeight));
