@@ -198,11 +198,15 @@ class Watermark extends ImagineAware {
 					}
 				}
 
-				// Opacity
-				if (!$isGmagick && $p['opacity'] < 100) {
-					$a = round((100 - $p['opacity']) * 2.55);  // calculate alpha (0:opaque - 255:transparent)
-					$mask = $imagine->create($wmSize, self::$rgb->color(array($a, $a, $a)));
-					$wm->applyMask($isRImage ? $mask->getImage() : $mask);
+				if ($isRImage && !$isGmagick && $p['opacity'] < 100) {  // for Imagick we can easily reduce transparency
+					try {
+						$wm->fade($p['opacity'] / 100);
+					}
+					catch (\Exception $e) {  // maybe. fallback for ImageMagick < 6.3.1
+						$a = round((100 - $p['opacity']) * 2.55);  // calculate alpha (0:opaque - 255:transparent)
+						$mask = $imagine->create($wmSize, self::$rgb->color(array($a, $a, $a)));
+						$wm->applyMask($mask->getImage());
+					}
 				}
 
 				// Rotation
@@ -250,7 +254,12 @@ class Watermark extends ImagineAware {
 
 				}
 
-				$image->paste($isRImage ? $wm->getImage() : $wm, $wmStartPoint);
+				if ($isRImage) {
+					$image->paste($wm->getImage(), $wmStartPoint);
+				}
+				else {  // GD
+					imagecopymerge($image->getGdResource(), $wm->getGdResource(), $wmStartPoint->getX(), $wmStartPoint->getY(), 0, 0, $wmWidth, $wmHeight, $p['opacity']);
+				}
 			}
 			catch(\Exception $e) {
 				$this->debugmessages[] = '*** Image Watermark Error: ' . $e->getMessage();
