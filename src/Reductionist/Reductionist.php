@@ -167,7 +167,8 @@ public function processImage($input, $output, $options = array()) {
 	$this->width = $this->height = null;
 	if (is_string($options))  { $options = parse_str($options); }  // convert an options string to an array if needed
 	$inputParams = array('options' => $options);
-	$outputIsJpg = strncasecmp('jp', pathinfo($output, PATHINFO_EXTENSION), 2) === 0;
+	$outputType = pathinfo($output, PATHINFO_EXTENSION);
+	$outputIsJpg = strncasecmp('jp', $outputType, 2) === 0;
 
 	try {
 /* initial dimensions */
@@ -468,8 +469,10 @@ public function processImage($input, $output, $options = array()) {
 		}
 
 /* save */
-		$outputOpts = array('quality' => empty($options['q']) ? $this->defaultQuality : (int) $options['q']);  // change 'q' to 'quality', or use default
-		if (!empty($options['f'])) { $outputOpts['format'] = $options['f']; }
+		$outputOpts = array(
+			'jpeg_quality' => empty($options['q']) ? $this->defaultQuality : (int) $options['q'],  // change 'q' to 'quality', or use default
+			'format' => empty($options['f']) ? $outputType : $options['f']
+		);
 		$image->save($output, $outputOpts);
 		if (!$this->width)  { $this->width = $width; }
 		if (!$this->height)  { $this->height = $height; }
