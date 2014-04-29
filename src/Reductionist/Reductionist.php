@@ -349,9 +349,9 @@ public function processImage($input, $output, $options = array()) {
 		if (isset($scBox)) {
 			$scale = max($width / $origWidth, $height / $origHeight);
 			if ($scale <= 0.5 && $this->gLib && $image->getFormat() === IMG_JPG) {
-				$scaleBox = new Box(round($inputParams['width'] * $scale), round($inputParams['height'] * $scale));
-				$image->resize($scaleBox);
+				$image->resize(new Box(round($inputParams['width'] * $scale), round($inputParams['height'] * $scale)));
 				$scStart = new \Imagine\Image\Point(round($cropStartX * $scale), round($cropStartY * $scale));
+				$scBox = new Box(round($scBox->getWidth() * $scale), round($scBox->getHeight() * $scale));
 			}
 			else {
 				$scStart = new \Imagine\Image\Point($cropStartX, $cropStartY);
@@ -444,7 +444,7 @@ public function processImage($input, $output, $options = array()) {
 				$this->debugmessages[] = "JPEG prescale - w: {$image->prescalesize[0]} | h: {$image->prescalesize[1]} " . sprintf("(%2.2f MP)", $image->prescalesize[0] * $image->prescalesize[1] / 1e6);
 			}
 			if (isset($scBox)) {
-				$this->debugmessages[] = "Source area - start: ($cropStartX, $cropStartY) | box: $scBox";
+				$this->debugmessages[] = "Source area - start: $scStart | box: $scBox";
 			}
 			if (isset($wRequested)) {
 				$this->debugmessages[] = "Requested - w: " . round($wRequested) . ' | h: ' . round($hRequested);
