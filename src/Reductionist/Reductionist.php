@@ -217,6 +217,7 @@ public function processImage($input, $output, $options = array()) {
 			}
 		}
 		$origAR = $origWidth / $origHeight;  // original image aspect ratio
+		$origAspect = round($origAR, 2);
 
 /* input dimensions */
 		// use width/height if specified
@@ -224,12 +225,11 @@ public function processImage($input, $output, $options = array()) {
 		if (isset($options['h']))  { $height = $options['h']; }
 
 		// override with any orientation-specific dimensions
-		$aspect = round($origAR, 2);
-		if ($aspect > 1) {  // landscape
+		if ($origAspect > 1) {  // landscape
 			if (isset($options['wl']))  { $width = $options['wl']; }
 			if (isset($options['hl']))  { $height = $options['hl']; }
 		}
-		elseif ($aspect < 1) {  // portrait
+		elseif ($origAspect < 1) {  // portrait
 			if (isset($options['wp']))  { $width = $options['wp']; }
 			if (isset($options['hp']))  { $height = $options['hp']; }
 		}
@@ -273,14 +273,15 @@ public function processImage($input, $output, $options = array()) {
 
 		if (empty($options['zc']) || !$bothDims) {
 /* non-zc sizing */
-			if ($newAR < $origAR) {  // Make sure AR doesn't change. Smaller dimension...
+			$newAspect = round($newAR, 2);  // ignore small differences
+			if ($newAspect < $origAspect) {  // Make sure AR doesn't change. Smaller dimension...
 				if ($origWidth < $options['w'] && empty($options['aoe'])) {
 					$options['w'] = $width = $origWidth;
 					$options['h'] = $width / $newAR;
 				}
 				$height = $width / $origAR;
 			}
-			elseif ($newAR > $origAR) {  // ...limits larger
+			elseif ($newAspect > $origAspect) {  // ...limits larger
 				if ($origHeight < $options['h'] && empty($options['aoe'])) {
 					$options['h'] = $height = $origHeight;
 					$options['w'] = $height * $newAR;
@@ -320,19 +321,19 @@ public function processImage($input, $output, $options = array()) {
 			}
 
 			// make sure final image will cover the crop box
-			if ($height * $origAR > $width)  {  // needs horizontal cropping
-				$newWidth = round($height * $origAR);
-				$width = round($width);
-				$newHeight = $height = round($height);
+			$width = round($width);
+			$height = round($height);
+			$newWidth = round($height * $origAR);
+			$newHeight = round($width / $origAR);
+			if ($newWidth > $width)  {  // needs horizontal cropping
+				$newHeight = $height;
 			}
-			elseif ($width / $origAR > $height)  {  // needs vertical cropping
-				$newHeight = round($width / $origAR);
-				$height = round($height);
-				$newWidth = $width = round($width);
+			elseif ($newHeight > $height)  {  // needs vertical cropping
+				$newWidth = $width;
 			}
 			else {  // no cropping needed, same AR
-				$newWidth = $width = round($width);
-				$newHeight = $height = round($height);
+				$newWidth = $width;
+				$newHeight = $height;
 			}
 
 			$cropStart = Reductionist::startPoint(
@@ -359,6 +360,12 @@ public function processImage($input, $output, $options = array()) {
 				$scStart = new \Imagine\Image\Point($cropStartX, $cropStartY);
 			}
 			$image->crop($scStart, $scBox);
+			if (abs($scBox->getWidth() - $width) == 1) {  // snap a 1px rounding error to the source crop box
+				$this->width = $width = $scBox->getWidth();
+			}
+			if (abs($scBox->getHeight() - $height) == 1) {
+				$this->height = $height = $scBox->getHeight();
+			}
 		}
 
 /* resize, aoe */
