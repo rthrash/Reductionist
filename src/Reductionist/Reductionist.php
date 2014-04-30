@@ -120,7 +120,7 @@ static public function startPoint($opt, $containerDims, $imageDims) {
 		$x = (int) (($containerDims[0] - $imageDims[0]) / 2);
 		$y = (int) (($containerDims[1] - $imageDims[1]) / 2);
 	}
-	if ($x < 0)  { $x = 0; }
+	if ($x < 0)  { $x = 0; }  // a negative value wouldn't make sense
 	if ($y < 0)  { $y = 0; }
 	return new \Imagine\Image\Point($x, $y);
 }
@@ -182,7 +182,7 @@ public function processImage($input, $output, $options = array()) {
 			return false;
 		}
 
-/* source crop */
+/* source crop (start) */
 		if (isset($options['sw']) || isset($options['sh'])) {
 			if (empty($options['sw']) || $options['sw'] > $origWidth) {
 				$newWidth = $origWidth;
@@ -218,6 +218,7 @@ public function processImage($input, $output, $options = array()) {
 		}
 		$origAR = $origWidth / $origHeight;  // original image aspect ratio
 
+/* input dimensions */
 		// use width/height if specified
 		if (isset($options['w']))  { $width = $options['w']; }
 		if (isset($options['h']))  { $height = $options['h']; }
@@ -346,6 +347,7 @@ public function processImage($input, $output, $options = array()) {
 			$height = $newHeight;
 		}
 
+/* source crop (finish) */
 		if (isset($scBox)) {
 			$scale = max($width / $origWidth, $height / $origHeight);
 			if ($scale <= 0.5 && $this->gLib && $image->getFormat() === IMG_JPG) {
@@ -380,7 +382,7 @@ public function processImage($input, $output, $options = array()) {
 /* crop */
 		if (isset($cropBox))  { $image->crop($cropStart, $cropBox); }
 
-/* filters */
+/* filters (start) */
 		if (!empty($options['fltr'])) {
 			if (!is_array($options['fltr'])) {
 				$options['fltr'] = array($options['fltr']);  // in case somebody did fltr= instead of fltr[]=
@@ -419,13 +421,10 @@ public function processImage($input, $output, $options = array()) {
 				->paste($this->gLib ? $image->getImage() : $image, isset($farPoint) ? $farPoint : self::$topLeft);
 		}
 
+/* filters (finish) */
 		if (isset($transformation) && !empty($doApply)) {  // apply any filters
-			try {
-				$transformation->apply($image);
-			}
-			catch (\Exception $e) {
-				$this->debugmessages[] = $e->getMessage();
-			}
+			try { $transformation->apply($image); }
+			catch (\Exception $e) { $this->debugmessages[] = $e->getMessage(); }
 		}
 
 /* debug info */
@@ -480,14 +479,15 @@ public function processImage($input, $output, $options = array()) {
 /* error handler */
 	catch(\Imagine\Exception\Exception $e) {
 		$this->debugmessages[] = "Input file: $input";
-		$this->debugmessages[] = 'Input options: ' . substr(var_export($inputParams['options'], true), 7, -3);
-		$this->debugmessages[] = '*** Error *** ' . $e->getMessage();
+		$this->debugmessages[] = 'Input options: ' . self::formatDebugArray($inputParams['options']);
+		$this->debugmessages[] = "*** Error *** {$e->getMessage()}";
 		return false;
 	}
 
 /* debug info (timing) */
 	if ($this->debug) {
 		$this->debugmessages[] = "Wrote $output";
+		$this->debugmessages[] = "Dimensions: {$this->width}x{$this->height} px";
 		$this->debugmessages[] = 'Execution time: ' . round((microtime(true) - $startTime - $debugTime) * 1e3) . ' ms';
 	}
 	return true;
