@@ -21,7 +21,6 @@ protected $imagine;
 protected $gLib;
 static protected $assetpaths;
 static protected $palette;
-static protected $topLeft;
 static protected $maxsize;
 
 /*
@@ -378,11 +377,11 @@ public function processImage($input, $output, $options = array()) {
 		elseif (isset($options['qmax']) && empty($options['aoe']) && isset($options['q']) && $outputIsJpg) {
 			// undersized input image. We'll increase q towards qmax depending on how much it's undersized
 			$sizeRatio = $requestedMP / (isset($cropBox) ? $this->width * $this->height : $width * $height);
-			if ($sizeRatio >= 3) {
+			if ($sizeRatio >= 2) {
 				$options['q'] = $options['qmax'];
 			}
 			elseif ($sizeRatio > 1) {
-				$options['q'] += round(($options['qmax'] - $options['q']) * ($sizeRatio - 1) / 2);
+				$options['q'] += round(($options['qmax'] - $options['q']) * ($sizeRatio - 1));
 			}
 		}
 
@@ -411,7 +410,6 @@ public function processImage($input, $output, $options = array()) {
 /* bg */
 		if ( $hasBG = (isset($options['bg']) && !$outputIsJpg) || isset($farBox)) {
 			if (self::$palette === null)  { self::$palette = new \Imagine\Image\Palette\RGB(); }
-			if (self::$topLeft === null)  { self::$topLeft = new \Imagine\Image\Point(0, 0); }
 			if (isset($options['bg']))  {
 				$bgColor = explode('/', $options['bg']);
 				$bgColor[1] = isset($bgColor[1]) ? $bgColor[1] : 100;
@@ -425,7 +423,7 @@ public function processImage($input, $output, $options = array()) {
 			else  { $bgBox = new Box($width, $height); }
 			$image = $this->imagine
 				->create($bgBox, self::$palette->color($bgColor[0], 100 - $bgColor[1]))
-				->paste($this->gLib ? $image->getImage() : $image, isset($farPoint) ? $farPoint : self::$topLeft);
+				->paste($this->gLib ? $image->getImage() : $image, isset($farPoint) ? $farPoint : new \Imagine\Image\Point(0, 0));
 		}
 
 /* filters (finish) */
